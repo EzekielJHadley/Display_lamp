@@ -21,7 +21,7 @@ void post_led();
 //define the data pin and number of LEDs
 #define NEO_Dout        (RX)
 #define NEO_LED_COUNT   (60)
-#define FRAME_RATE_ms   (1000)
+#define FRAME_RATE_ms   (50)
 
 
 //rest server struct
@@ -29,7 +29,7 @@ struct LED
 {
   uint8_t mode = 0;
   byte status;
-  float hue = 1.0;
+  float hue = 0.25;
   float sat = 1.0;
   float bright = 0.5;
 } led_resource;
@@ -37,7 +37,7 @@ struct LED
 //wifi parameter
 #define HTTP_REST_PORT    (80)
 #define WIFI_RETRY_DELAY  (500)
-#define SW_VERS           ("0.0.1")
+#define SW_VERS           ("0.0.2")
 
 const char* wifi_ssid = WIFI_SSID;
 const char* wifi_passwd = WIFI_PASSWD;
@@ -47,7 +47,7 @@ ESP8266WebServer http_rest_server(HTTP_REST_PORT);
 
 
 //global variables for neopixel 
-uint8_t led_brightness = 50; //max 255
+uint8_t led_brightness = 40; //max 255
 //Adafruit_NeoPixel strip(NEO_LED_COUNT, NEO_Dout, NEO_GRB + NEO_KHZ800); //the last two are built in NEO pixel definitions
 NeoPixelBus<NeoGrbFeature, Neo800KbpsMethod> strip(NEO_LED_COUNT);
 
@@ -79,7 +79,7 @@ void init_OTA()
   ESPhttpUpdate.onEnd(update_finished);
   ESPhttpUpdate.onProgress(update_progress);
   ESPhttpUpdate.onError(update_error);
-  ESPhttpUpdate.rebootOnUpdate(false);
+  ESPhttpUpdate.rebootOnUpdate(true);
 }
 
 //this sets the 
@@ -114,6 +114,7 @@ void setup()
   //set the LED to a default value on boot
   led_resource.status=0;
   digitalWrite(LED_BUILTIN, led_resource.status);
+  set_color();
 }
 
 //store the last frame draw
@@ -133,7 +134,7 @@ void loop()
   if( (current_time - last_draw) >= FRAME_RATE_ms) //draw the image ever FRAME_RATE_ms milliseconds
   {
     //rainbow_chase();
-    set_color(); 
+    strip.Show();
     last_draw = current_time;
   }
   http_rest_server.handleClient();
@@ -204,20 +205,38 @@ void post_led()
 
 void update_started()
 {
+  //set all to off
+  strip.ClearTo(RgbColor(0, 0, 0));
   Serial.println("started running update");
 }
 
 void update_finished()
 {
+  //set all to green
+  strip.ClearTo(RgbColor(0, 255, 0));
   Serial.println("Update finished");
 }
 
+
 void update_progress(int cur, int total)
 {
-  Serial.printf("CALLBACK:  HTTP update process at %d of %d bytes...\n", cur, total);
+  uint16_t percent_done = uint16_t(cur * (1.0 * NEO_LED_COUNT)/total);
+  if(strip.CanShow())
+  {
+    //load with a blue
+    strip.ClearTo(RgbColor(0, 0, 128), 0, percent_done);
+    strip.Show();
+  }
+  else
+  {
+    Serial.println("Cannot show");
+  }
+  Serial.printf("(%d)CALLBACK:  HTTP update process at %d of %d bytes (0x%X)...\n", millis(), cur, total, percent_done);
 }
 
 void update_error(int err) 
 {
+  //set all to red
+  strip.ClearTo(RgbColor(255, 0, 0));
   Serial.printf("CALLBACK:  HTTP update fatal error code %d\n", err);
 }
